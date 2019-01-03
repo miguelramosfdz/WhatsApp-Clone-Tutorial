@@ -1,0 +1,318 @@
+To create a new React app we're simply gonna use [`create-react-app`](https://github.com/facebook/create-react-app). It comes with a built-in TypeScript support which is exactly what we need. First, install the CLI if you haven't already:
+
+    $ yarn global add create-react-app
+
+And then create the app itself:
+
+    $ create-react-app whatsapp-clone-client
+
+By default, `create-react-app` will create a JavaScript project. In order to use TypeScript, we will rename our app files to have the right extension `.tsx` (TypeScript + JSX):
+
+    src$ mv App.js App.tsx
+    src$ mv index.js index.tsx
+
+And then we will add a couple of configuration files that will basically set the building and linting rules for the TypeScript compiler:
+
+{{{ diffStep 1.1 module="client" files="tsconfig.json, tslint.json" }}}
+
+Once we will run the app for the first time, `react-scripts` (`create-react-app` utility scripts package) should automatically initialize some additional TypeScript related files.
+
+    $ yarn start
+
+Since in our app we'll be using the new React [hooks](https://reactjs.org/docs/hooks-intro.html) and [Suspense](https://reactjs.org/docs/react-api.html#reactsuspense) mechanisms, we will upgrade React's version to version `16.8`:
+
+    $ yarn upgrade react@16.8.1 react-dom@16.8.1
+
+The plan is to make our app talk with a [GraphQL](https://graphql.org/) back-end, so we'll be using [Apollo](https://www.apollographql.com/) to setup a client which is actually capable of such.
+
+First we will install all the necessary packages:
+
+    $ yarn add apollo-cache-inmemory@1.4.3 apollo-client@2.4.13 apollo-link@1.2.8 apollo-link-http@1.5.11 apollo-link-ws@1.0.14 apollo-utilities@1.1.3 graphql@14.1.1 react-apollo-hooks@4.0.0 subscriptions-transport-ws@0.9.15
+    $ yarn add -D @types/graphql@14.0.7 @types/node@11.9.4
+
+Then we will set the server's connection URL under the `.env` file which is basically used to define constants for our application. The constants can be addressed using `process.env[CONSTANT_NAME]`. The identifier should be replaced automatically by `react-scripts` with the stored value, just like macros:
+
+{{{ diffStep 1.3 module="client" files=".env" }}}
+
+And finally we can write our Apollo-GraphQL client module and connect it to our application:
+
+{{{ diffStep 1.3 module="client" files="src/apollo-client.ts, src/index.tsx" }}}
+
+> Note that this configuration assumes that the sever runs at `localhost:4000` and that it serves a GraphQL REST endpoint at `/graphql`. Feel free to make the right adjustments according to your needs.
+
+Needless to say that we need a back-end for our application to function properly, and so this is what we're gonna focus on. We will initialize a second project for the server in a separate directory called `whatsapp-clone-server`:
+
+    $ mkdir whatsapp-clone-server
+    $ cd whatsapp-clone-server
+
+And then we will initialize a new Node.JS project using NPM:
+
+    $ npm init --yes
+
+There's nothing special about this command, it only creates a basic `package.json` which we can add things on top (see [reference](https://docs.npmjs.com/cli/init)). We will be using TypeScript in our project, so let's set it up by installing the necessary packages:
+
+    $ yarn add -D typescript@3.3.3 ts-node@8.0.2 @types/node@11.9.4
+
+And creating a `tsconfig.json` file:
+
+{{{ diffStep 1.1 module="server" files="tsconfig.json" }}}
+
+We will also set a script that will startup the server with `ts-node`, a TypeScript interpreter for Node.JS:
+
+```json
+{
+  "start": "ts-node index.ts"
+}
+```
+
+Our `pacakge.json` file should look like so by now:
+
+{{{ diffStep 1.1 module="server" files="package.json" }}}
+
+In our server we will be using [Express](https://expressjs.com/) to serve our GraphQL REST endpoint which will be handled by Apollo. Accordingly, let's install the necessary dependencies:
+
+    $ yarn add -D @types/body-parser@1.17.0 @types/cors@2.8.4 @types/express@4.16.0 @types/graphql@14.0.4
+    $ yarn add apollo-server-express@2.4.2 body-parser@1.18.3 cors@2.8.5 express@4.16.4 graphql@14.1.1
+
+And setup a basic express server with a `/graphql` REST endpoint:
+
+{{{ diffStep 1.2 module="server" files="index.ts, schema" }}}
+
+Before we proceed any further there's an issue that needs to be clear. Since we're using TypeScript together with GraphQL, by default we will have to maintain 2 schemas: one for TypeScript and the other for GraphQL. Both schemas represent the same thing this way or another, which means that we will have to maintain the same thing twice. Instead of doing so, we will be using a tool called [GraphQL Code Generator](https://graphql-code-generator.com/) (Codegen, in short) to generate TypeScript definitions from our GraphQL schema.
+
+Codegen will change its behavior and generate code based on a set of templates and a configuration file that we will provide. We highly recommend you to go through the [docs page](https://graphql-code-generator.com/docs/getting-started/) of Codegen to get a better understanding of what it is and how it works. Let's install Codegen then, along with the templates that we're gonna use:
+
+    $ yarn -D add graphql-code-generator@0.16.1 graphql-codegen-typescript-common@0.16.1 graphql-codegen-typescript-resolvers@0.16.1
+
+And write its config under `codegen.yml` file:
+
+{{{ diffStep 1.3 module="server" files="codegen.yml" }}}
+
+We will also update the `.gitignore` file to exclude the generated typings file:
+
+{{{ diffStep 1.3 module="server" files=".gitignore" }}}
+
+To make things easy, we will add a code generation command in our `package.json` so we can have it available to us whenever we need it. First we will add few utility packages that are necessary for the task:
+
+    $ yarn -D add nodemon@1.18.9 concurrently@4.1.0
+
+And we will update the scripts section in the `package.json` file to look like so:
+
+```json
+{
+  "generate": "gql-gen",
+  "generate:watch": "nodemon --exec yarn generate -e graphql",
+  "start:server": "ts-node index.ts",
+  "start:server:watch": "nodemon --exec yarn start:server -e ts",
+  "dev": "concurrently \"yarn generate:watch\" \"yarn start:server:watch\"",
+  "start": "yarn generate && yarn start:server"
+}
+```
+
+The `package.json` file should look like so by now:
+
+{{{ diffStep 1.3 module="server" files="package.json" }}}
+
+To generate some TypeScript definitions all we have to do is run:
+
+    $ yarn generate
+
+And then we can safely run the server with:
+
+    $ yarn start
+
+Alternatively, you can run the server and watch for changes with the following command:
+
+    $ yarn start:server:watch
+
+For practice purpose only, we're gonna serve some dummy data from our GraphQL API so we can have something to work with in our client. Later on we will connect everything to a real database. This would give us an easy start. Our dummy db will consist of a set of chats, each of them has a last message, a picture and a name:
+
+{{{ diffStep 1.4 module="server" files="index.ts, db.ts, entity, schema, codegen.yml" }}}
+
+As you can see, we've added an `entity` folder which treats each entity independently. This will server us greatly is the new future when we will connect each entity to a database. The GraphQL resolvers are the "projectors" of the data stored in the fake DB, and they will serve it based on their implementation and provided parameters.
+
+Now, let's make the necessary modifications to our client so it can work alongside the server and show the data that it contains. Similarly to the server, we don't wanna maintain a TypeScript code base for our GraphQL documents, therefore we will install Codegen for the client as well. Let's install the necessary NPM packages:
+
+    $ yarn add -D graphql-code-generator@0.16.1 graphql-codegen-typescript-client@0.16.1 graphql-codegen-typescript-common@0.16.1
+
+Write a Codegen config:
+
+{{{ diffStep 1.4 module="client" files="codegen.yml, codegen-interpreter.ts" }}}
+
+And define `.gitignore` rules that will not include generated files in our git project:
+
+{{{ diffStep 1.4 module="client" files="src/graphql/.gitignore" }}}
+
+Few things you should note:
+
+- Our `codegen.yml` config references directly to the schema file in our server, which means that the server should be cloned alongside the client. Codegen also supports providing a REST endpoint, but if possible it's better to avoid it because this way you don't need to provide credentials. Indeed, the plan is to have an authentication mechanism to guard our GraphQL REST endpoint.
+- The `codegen-interpreter.ts` file is necessary because it extends the `tsconfig.json` file without us actually changing it. If you'll try to edit the `tsconfig.json` file directly, then `react-scripts` will change it back to its original form.
+
+We will also add the necessary scripts to our `pacakge.json` so we can run `code-gen`:
+
+```json
+{
+  "start": "concurrently \"yarn generate:watch\" \"react-scripts start\"",
+  "generate": "gql-gen",
+  "generate:watch": "nodemon --exec yarn generate -e graphql"
+}
+```
+
+Be sure to install `concurrently` and `nodemon` so the scripts can work as intended:
+
+    $ yarn add -D nodemon@1.18.9 ts-node@8.0.2 concurrently@4.1.0
+
+At this point our `package.json` file should look like this:
+
+{{{ diffStep 1.4 module="client" files="package.json" }}}
+
+Now whenever we would like to generate some TypeScript definitions we can simply run:
+
+    $ yarn generate
+
+Alternatively we can just start the app on watch mode with `$ yarn start` and the Codegen should be listening for changes as well.
+
+    $ yarn start
+
+Now let's build a dashboard that will show all the chats in the server. Rather than implementing all the components and stylesheets from scratch, we will be using [`material-ui`](https://material-ui.com/) (aka Material). Material comes with pre-made components which are highly functional and work smooth with animations. To set it up we will first install it:
+
+    $ yarn add @material-ui/core@3.9.2 @material-ui/icons@3.0.2
+
+And then we will initialize it with the right theme values:
+
+{{{ diffStep 1.5 module="client" files="src/index.tsx" }}}
+
+The theme values represent the main colors in our app. If you're familiar with WhatsApp, you know that its main colors consist mostly of Green and White. The theme values will automatically give Material components the desired style.
+
+We will also make sure that the same values are available in our CSS stylesheet so we can use it outside Material's scope:
+
+{{{ diffStep 1.5 module="client" files="src/index.css" }}}
+
+Now we're ready to start implementing the view itself. The logic is very simple, we will use a query to fetch the chats from our back-end. Accordingly we will need to define the right [GraphQL fragments](https://www.apollographql.com/docs/react/advanced/fragments.html) so we can use them to build the query. In short, a fragment is used to represent an entity in our app. **It doesn't necessarily has to represent a type**, but indeed it's the most common use case:
+
+{{{ diffStep 1.6 module="client" files="src/graphql/fragments" }}}
+
+Let's move on to implementing the components. The layout is simple and consists of a navigation bar and a chats list. There are few important details you should note about the components:
+
+- They use [Material's](https://material-ui.com) pre-made components and icons, which are styled and highly functional right out of the box.
+- Instead of using CSS to style our components we use [`styled-components`](https://www.styled-components.com/). This way we can encapsulate the style and it will live right next to the component.
+- We will use [`react-apollo-hooks`](https://github.com/trojanowski/react-apollo-hooks) to connect our Apollo client with our React components. **This library is experimental and shouldn't be used in production yet**.
+
+{{{ diffStep 1.6 module="client" files="src/components" }}}
+
+Let's install the missing dependencies:
+
+    $ yarn add -D @types/moment@2.13.0
+    $ yarn add graphql-tag@2.10.1 moment@2.24.0 subscriptions-transport-ws@0.9.15 styled-components@4.1.3
+
+And add a default profile picture to our assets directory under `public/assets/default-profile-pic.jpg`:
+
+![default-profile-pic.jpg](https://user-images.githubusercontent.com/7648874/51983273-38229280-24d3-11e9-98bd-363764dc6d97.jpg)
+
+The chats which are currently served by the server already have a picture, but it's not uncommon to have a chat without any picture in our app.
+
+Lastly, in order to make the list that we've just created visible, we will mount it at the main app component:
+
+{{{ diffStep 1.6 module="client" files="src/App.tsx" }}}
+
+Now we should be able to see the chats in the React app! We can test it out by running
+
+    # terminal 1
+    server$ yarn generate
+    server$ yarn start
+    # terminal 2
+    client$ yarn generate
+    client$ yarn start
+
+Everything works, but it's not over yet. Our application can't be based on a served hard-coded JSON. A real app has a database. There are many advantages for using a database over an in-memory or FS stored data:
+
+- It is VERY fast, and can deal with large amounts of data.
+- Data fetching can be optimized by defining indexes.
+- You need the right read/write permissions which makes it very secure.
+- Data will persist even if the server crashes or the machine is randomly closed.
+- A lot more...
+
+We will be using [PostgreSQL](https://www.postgresql.org/) (Postgres, in short) as our database with [TypeORM](https://github.com/typeorm/typeorm) as an ORM around Postgres. First make sure that you install Postgres on your machine by following the [official installation instructions](https://www.labkey.org/Documentation/wiki-page.view?name=commonInstall).
+
+To make sure the whole shebang works with Node.JS, we will install few packages:
+
+    $ yarn add pg@7.8.0 typeorm@0.2.11 reflect-metadata@0.1.12
+    $ yarn add -D @types/pg@7.4.11
+
+> The [`reflect-metadata`](https://www.npmjs.com/package/reflect-metadata) package will emit metadata for JavaScript [decorators](https://github.com/tc39/proposal-decorators). This will be used internally by TypeORM to determine column types based on their corresponding TypeScript type.
+
+This would require us to set some configuration so TypeORM would know where and how to connect the DB. We will use the `whatsapp` DB with the `test` username:
+
+{{{ diffStep 1.5 module="server" files="ormconfig.json, index.ts" }}}
+
+TypeORM wraps the official Postgres driver so you shouldn't worry about interacting with it. Feel free to edit `ormconfig.json` file based on your needs.
+
+We will also define the type of expected GraphQL context using Codegen. All we have to do is to create a `context.ts` file and specify it in the `codegen.yml` file:
+
+{{{ diffStep 1.5 module="server" files="codegen.yml, context.ts" }}}
+
+TypeORM has a very defined structure for organizing a project. Each table in our database, its columns and its relationships should be defined in an entity file under the `entity` folder. Why `entity` folder? Because the `ormconfig.json` says so. This is why originally we defined a TypeScript definition for each entity under a separate file. As for now, we will have 3 entities:
+
+- A chat entity.
+- A message entity.
+- A user entity.
+
+As we make progress, we will add more entities and edit the relationships between them:
+
+{{{ diffStep 1.6 module="server" files="entity" }}}
+
+Now that we have the entities set, we can make requests to Postgres. Let's edit our resolvers to use the entities:
+
+{{{ diffStep 1.6 module="server" files="schema" }}}
+
+Notice that we've used a custom scalar type to represent a `Date` object in our GraphQL schema using a package called [`graphql-iso-date`](https://www.npmjs.com/package/graphql-iso-date). Accordingly, let's install this package:
+
+    $ yarn add graphql-iso-date@3.6.1
+    $ yarn add -D @types/graphql-iso-date@3.3.1
+
+And update `codegen.yml` to use it in the generated code file:
+
+{{{ diffStep 1.6 module="server" files="codegen" }}}
+
+Instead of fabricating a DB into the memory, we will replace the `db.ts` module with a function that will add sample data, using entities of course. This will be very convenient because this way we can test our app:
+
+{{{ diffStep 1.6 module="server" files="db" }}}
+
+Instead of adding the sample data any time we start the server, we will use an `--add-sample-data` flag which will be provided to the server's process:
+
+{{{ diffStep 1.6 module="server" files="index.ts" }}}
+
+> More about processes can be read [here](https://medium.com/the-guild/getting-to-know-nodes-child-process-module-8ed63038f3fa).
+
+Most Apollo-server implementations will assemble the GraphQL schema by importing a bunch of resolvers from different modules, if not having everything in a single place. This often times leads to a lot of problems as maintenance becomes harder the bigger the server gets, especially if we don't have a defined structure. Instead of going with that approach, we will be using [GraphQL-Modules](https://graphql-modules.com) (GQLModules, in short).
+
+The idea behind GQLModules is to implement the Separation of Concerns design pattern in GraphQL, and to allow you to write simple modules that only do what they need to. This way it's easier to write, maintain and test. You should get a better understanding of GQLModules as we go further with this tutorial.
+
+To setup GQLModules we will install a couple of packages:
+
+    $ yarn add @graphql-modules/core@0.4.2 @graphql-modules/sonar@0.4.0 @graphql-modules/di@0.4.0
+
+- The `sonar` package will be sued to detect `.graphql` files within our server.
+- The `di` package is responsible for dependencies injection.
+
+Now we're gonna implement a dedicated GraphQL module for each of our entity:
+
+{{{ diffStep 1.7 module="server" files="modules/(utils|auth|chat|message|user)" }}}
+
+The implementation of the resolvers is NOT implemented in the resolver functions themselves, but rather in a separate provider. With this working model we can import and use the providers in various modules, not necessarily a specific one. In addition, we can mock the provider handlers, which makes it more testable.
+
+We've also created a module called `auth`, which will be responsible for authentication in the near future. For now we use a constant for `currentUser` so we can implement the handlers as if we already have authentication.
+
+We will use a main GQLModule called `app` to connect all our components and export a unified schema:
+
+{{{ diffStep 1.7 module="server" files="modules/app" }}}
+
+Accordingly, we will update the server to use the schema exported by the module we've just created
+
+{{{ diffStep 1.7 module="server" files="index, schema" }}}
+
+Now try to run the app again and see how things work. Of course, there shouldn't be any visual differences, but know that having a DB as an essential step.
+
+    $ yarn start --reset-dummy-data
+
+In the next step we refactor our back-end so it can be more maintainable, and we will setup a basic authentication mechanism. WhatsApp is not WhatsApp without authentication!
