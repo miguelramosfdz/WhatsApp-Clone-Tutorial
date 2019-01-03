@@ -1,0 +1,6 @@
+[submodule "server"]
+	path = server
+	url = ../WhatsApp-Clone-Server
+[submodule "client"]
+	path = client
+	url = ../WhatsApp-Clone-Client

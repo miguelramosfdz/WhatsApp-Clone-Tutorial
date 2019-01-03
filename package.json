@@ -1,0 +1,9 @@
+{
+  "name": "whatsApp-clone-tutorial",
+  "description": "Fully functional WhatsApp Clone using React (Hooks+Suspense), GraphQL, Apollo, TypeScript and PostgreSQL",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://Urigo@github.com/Urigo/WhatsApp-Clone-Tutorial.git"
+  }
+}
