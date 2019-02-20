@@ -1,0 +1,69 @@
+Group messaging can be quite tricky and so I would like to explain the hierarchy between the entities. `Chat` will have the following fields:
+
+- `Chat.actualGroupMembers` - The current users who are currently participating in the group. Once a message was sent by someone in the group, all the members under `actualGroupMembers` will be notified with the target message.
+
+- `Chat.listingMembers` - The current users which have the chat listed in their view. Any user who will be kicked out of the group will not only be absent from `Chat.actualGroupMembers`, but it will also be spliced from `Chat.listingMembers`, as its existence in the chat is correlated to what it can currently view.
+
+- `Chat.admins` - The users who currently control the group; they will have permissions to add and remove users from the group, and change its name and picture.
+
+Together we can have a complete flow where users can chat with each-other in a group. In this step we will add a group-details screen, where we will be able to see the participants of the group, and we will use the existing users list component to select users that we would like to participate in our group chat. The back-end should include a new mutation called `addGroup()` that will help use create chat group.
+
+So before we proceed to the front-end, let's take care of the back-end. We will add the missing fields to the Chat entity, and make the necessary adjustments in existing resolvers:
+
+{{{ diffStep 4.1 module="server" }}}
+
+Now we will add 2 new mutations:
+
+- `addGroup` mutation - Responsible for creating chat groups.
+- `updateChat` mutation - Unlike a single chat which is synced with a user's info, a group chat will be independent, therefore we will need a method that could updated its fields.
+
+Let's implement those:
+
+{{{ diffStep 4.2 module="server" }}}
+
+Now that the back-end is set, we will need to update the chat fragment in the client to contain the new field `isGroup`:
+
+{{{ diffStep 4.1 module="client" }}}
+
+Now we will create the new-group screen. Like the new-chat screen, it will have an almost identical layout, only the behavior is gonna be slightly different. In the new screen we will be able to select multiple users before we proceed, then, we should be able to view the group details and edit them before we create the group. Let's implement the new-group screen:
+
+{{{ diffStep 4.2 module="client" files="src/components/NewGroupScreen" }}}
+
+Now we will add a dedicated route, and we will also create a "New Group" button which will be presented in the new chat screen. This way we can create a new group from the new chat screen if we want to, by simply clicking on that button and moving on to the new group screen.
+
+{{{ diffStep 4.2 module="client" files="src/App, src/components/NewChatScreen" }}}
+
+Up-next would be the group details screen. The layout consists of:
+
+- A navbar with a back button.
+- Picture and name inputs.
+- A horizontal list of all the participants.
+- A "complete" button that will send a mutation request to the server.
+
+Once a name has been typed, the "complete" button should pop-up. Let's implement the screen then:
+
+{{{ diffStep 4.3 module="client" files="src/components/GroupDetailsScreen" }}}
+
+This will require us to download a new asset to the `public/assets` directory which represents the default picture for a group. Please save it as `default-group-pic.jpg`:
+
+![default-group-pic.jpg](https://user-images.githubusercontent.com/7648874/51983284-3b1d8300-24d3-11e9-9f8b-afe36a3b9df1.jpg)
+
+Let's add a route for the screen we've just created:
+
+{{{ diffStep 4.3 module="client" files="src/App" }}}
+
+There's one last thing missing in the flow and that would be migrating existing components to work well with the new feature of group chats.
+
+Starting with the chats list component, we would like to display the default profile picture for group chats:
+
+{{{ diffStep 4.4 module="client" files="src/components/ChatsListScreen" }}}
+
+In the messages list component, we would like to display the name of the owner of the message, so we would know exactly who sent it in case we're in a group chat:
+
+{{{ diffStep 4.4 module="client" files="src/components/ChatRoomScreen/MessagesList" }}}
+
+And now what we're gonna do is basically use the group details screen to show the details of the group that we're currently at. If we're an admin of the group, we would be able to edit its details, and if not, we will only be able to view its details without changing any of it. The view and some of the logic are the same whether it's a new group or an existing one, but there are slight differences. To deal with the differences, we will use "if" statements before we use the hooks, but **beware whenever you do that!** If you'll use an expression that is likely to change during the component's lifespan, you should NOT use a hook inside the "if" statement's block, because the React engine relies on the hooks to be called in a similar order.
+
+{{{ diffStep 4.3 module="client" files="src/components/ChatRoomScreen/ChatNavBar, src/components/GroupDetailsScreen" }}}
+
+That's it! Now we should be able to create group chats and message multiple people at once.
